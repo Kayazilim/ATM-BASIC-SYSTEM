@@ -1,0 +1,103 @@
+#include <iostream>
+#include <fstream>
+#include <limits>
+#include "Account.h"
+
+using namespace std;
+
+/**
+ * @brief Ensures the user inputs a valid number, preventing system crashes.
+ */
+double getSecureInput() {
+    double input;
+    while (!(cin >> input)) {
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Invalid input! Please enter a number: ";
+    }
+    return input;
+}
+
+int main() {
+    double b = 0.0;
+    int p = 0;
+    bool blk = false;
+    double dailyTotal = 0.0;
+
+    ifstream dataFile("account_data.txt");
+
+    // 1. Initial Setup
+    if (!dataFile.is_open()) {
+        cout << "--- ATM INITIAL SETUP ---\n";
+        cout << "Set initial balance: "; b = getSecureInput();
+        cout << "Set 4-digit PIN: "; p = (int)getSecureInput();
+
+        Account newUser(b, 1001, p, false, 0.0);
+        newUser.saveToFile();
+        newUser.logTransaction("ACCOUNT_CREATED");
+        cout << "Setup complete. Please restart the application.\n";
+        return 0;
+    }
+
+    // 2. Data Integrity & Corruption Check
+    if (!(dataFile >> b >> p >> blk >> dailyTotal)) {
+        cout << "FATAL ERROR: account_data.txt is corrupted!\n";
+        cout << "Delete the file and restart to setup again.\n";
+        dataFile.close();
+        return 1;
+    }
+    dataFile.close();
+
+    Account user(b, 1001, p, blk, dailyTotal);
+
+    // 3. Block Check
+    if (user.getBlockStatus()) {
+        cout << "SECURITY ALERT: This account is blocked. Contact customer service.\n";
+        return 0;
+    }
+
+    // 4. Login with 3 attempts
+    int attempts = 3;
+    bool loggedIn = false;
+    while (attempts > 0 && !loggedIn) {
+        cout << "Enter PIN (" << attempts << " attempts left): ";
+        int inputPin = (int)getSecureInput();
+        if (user.verifyPin(inputPin)) loggedIn = true;
+        else {
+            attempts--;
+            cout << "Incorrect PIN!\n";
+        }
+    }
+
+    if (!loggedIn) {
+        user.setBlock();
+        cout << "3 failed attempts. Account has been blocked for security.\n";
+        return 0;
+    }
+
+    // 5. Main Menu
+    int choice = 0;
+    while (choice != 5) {
+        cout << "\n1-Balance 2-Deposit 3-Withdraw 4-Change PIN 5-Exit\nChoice: ";
+        choice = (int)getSecureInput();
+
+        switch (choice) {
+        case 1: cout << "Current Balance: " << user.getBalance() << " USD\n"; break;
+        case 2:
+            cout << "Deposit amount: ";
+            user.deposit(getSecureInput());
+            break;
+        case 3:
+            cout << "Withdraw amount: ";
+            if (user.withdraw(getSecureInput())) cout << "Transaction successful.\n";
+            break;
+        case 4:
+            cout << "Enter new 4-digit PIN: ";
+            user.changePin((int)getSecureInput());
+            break;
+        case 5: cout << "Thank you for using our ATM. Goodbye!\n"; break;
+        default: cout << "Invalid option!\n";
+        }
+    }
+    return 0;
+}
